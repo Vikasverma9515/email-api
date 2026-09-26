@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     to,
     subject,
     text: body,
+    priority: "high", // X-Priority: 1 + Importance: High (red "!" in Outlook, Apple Mail, Yahoo)
     attachments: [
       {
         filename: RESUME_FILENAME,
