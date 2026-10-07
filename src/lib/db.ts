@@ -5,7 +5,13 @@ function db() {
   if (!_client) {
     _client = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        global: {
+          // Bypass Next.js fetch cache so the dashboard always shows live data
+          fetch: (url, options) => fetch(url, { ...options, cache: "no-store" }),
+        },
+      }
     );
   }
   return _client;
