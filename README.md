@@ -1,6 +1,8 @@
 # Email API — Resume Mailer
 
-A Next.js API that sends cold emails to recruiters with your resume auto-attached. Your AI assistant (ChatGPT, Claude, etc.) calls it via HTTP — you never touch email manually.
+A Next.js app deployed on Vercel that sends cold emails to recruiters with your resume auto-attached. Your AI assistant (ChatGPT, Claude, etc.) calls it via HTTP. Includes a live tracking dashboard showing opens, sent count, and follow-ups.
+
+**Live URL:** `https://email-api-drab.vercel.app`
 
 ---
 
@@ -8,11 +10,13 @@ A Next.js API that sends cold emails to recruiters with your resume auto-attache
 
 | Endpoint | What it does |
 |---|---|
+| `GET /` | Dashboard — shows all sent emails, open status, stats |
 | `POST /api/send-email` | Sends email + resume PDF attached |
-| `POST /api/follow-up` | Sends a follow-up with `Re:` prefix so it threads in their inbox |
-| `GET /api/send-email` | Health check — confirms the resume is bundled and the API is alive |
+| `POST /api/follow-up` | Sends a follow-up with `Re:` prefix so it threads |
+| `GET /api/send-email` | Health check — confirms resume is bundled and API is alive |
+| `GET /api/track/[id]` | Open tracking pixel — called automatically when recipient opens email |
 
-Every email is sent as proper HTML with a clean layout and your name/email in the footer, plus a plain-text fallback.
+Every email is sent as clean HTML with a signature footer and plain-text fallback. Open tracking is embedded automatically when `APP_URL` is set.
 
 ---
 
@@ -21,147 +25,159 @@ Every email is sent as proper HTML with a clean layout and your name/email in th
 ```
 email-api/
 ├── assets/
-│   └── resume.pdf                  ← YOUR resume goes here
+│   └── resume.pdf                       ← YOUR resume goes here
 ├── src/
+│   ├── lib/
+│   │   └── db.ts                        ← JSON file storage (./data/ locally, /tmp/ on Vercel)
 │   └── app/
 │       ├── api/
-│       │   ├── send-email/
-│       │   │   └── route.ts        ← main send endpoint
-│       │   └── follow-up/
-│       │       └── route.ts        ← follow-up endpoint
+│       │   ├── send-email/route.ts      ← main send endpoint
+│       │   ├── follow-up/route.ts       ← follow-up endpoint
+│       │   └── track/[id]/route.ts      ← open tracking pixel
 │       ├── layout.tsx
-│       └── page.tsx
-├── next.config.js                  ← bundles assets/resume.pdf into the serverless function
-├── .env.example                    ← copy to .env.local and fill in
+│       └── page.tsx                     ← dashboard UI
+├── next.config.js                       ← bundles assets/resume.pdf into the function
+├── .env.example                         ← copy to .env.local and fill in
 └── package.json
 ```
 
 ---
 
-## Step 1 — Replace the resume
+## Environment variables
 
-1. Export your resume as a PDF.
-2. Rename it to **`resume.pdf`** (exact name, lowercase).
-3. Drop it into `assets/`, replacing the existing file.
-4. Open [`src/app/api/send-email/route.ts`](src/app/api/send-email/route.ts) and change:
-   ```ts
-   const RESUME_FILENAME = "YourName_Resume.pdf";
-   ```
-   Do the same in [`src/app/api/follow-up/route.ts`](src/app/api/follow-up/route.ts).
-   This is just the filename the recipient sees — pick anything.
-
----
-
-## Step 2 — Set up Gmail App Password
-
-1. Google Account → **Security** → **2-Step Verification** (must be enabled)
-2. Scroll to the bottom → **App passwords**
-3. App: Mail, Device: Other → name it "Email API" → Generate
-4. Copy the 16-character password (e.g. `abcd efgh ijkl mnop`)
-
-> If you don't see App passwords, 2-Step Verification is not on, or your account is a Google Workspace account with restrictions.
-
----
-
-## Step 3 — Configure environment variables
-
-Copy `.env.example` to `.env.local`:
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in `.env.local`:
-
-```
-GMAIL_USER=you@gmail.com
-GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
-API_SECRET=make-up-any-long-random-string
-FROM_NAME=Your Full Name
-```
+All 5 vars are required for full functionality.
 
 | Variable | Description |
 |---|---|
-| `GMAIL_USER` | The Gmail address that sends the emails |
-| `GMAIL_APP_PASSWORD` | 16-char app password from Step 2 (spaces are fine) |
-| `API_SECRET` | A secret you invent — every request must include it in the header |
-| `FROM_NAME` | Display name shown in the From field (e.g. "Vikas Verma") |
+| `GMAIL_USER` | Gmail address that sends the emails (`vikasverma951582@gmail.com`) |
+| `GMAIL_APP_PASSWORD` | 16-char Gmail App Password (Google Account → Security → App passwords) |
+| `API_SECRET` | Secret header value — every API request must include this |
+| `FROM_NAME` | Display name in the From field (e.g. `Vikas Verma`) |
+| `APP_URL` | Your deployed Vercel URL — enables open tracking pixels in emails |
+
+### Current values on Vercel production
+
+```
+GMAIL_USER        = vikasverma951582@gmail.com
+GMAIL_APP_PASSWORD= (encrypted, set 11 days ago)
+API_SECRET        = 588669bcc37128310aa33992f42f6ec2e77eac1a0495f7ea
+FROM_NAME         = Vikas Verma
+APP_URL           = https://email-api-drab.vercel.app
+```
+
+### Local development (.env.local)
+
+```
+GMAIL_USER=vikasverma951582@gmail.com
+GMAIL_APP_PASSWORD=your-16-char-app-password
+API_SECRET=588669bcc37128310aa33992f42f6ec2e77eac1a0495f7ea
+FROM_NAME=Vikas Verma
+APP_URL=https://email-api-drab.vercel.app
+```
 
 ---
 
-## Step 4 — Deploy to Vercel
+## How to replace the resume
 
-```bash
-npm install -g vercel
-vercel
-```
-
-Or push to GitHub → [vercel.com](https://vercel.com) → **Add New Project** → import repo → Deploy.
-
-**Add all 4 env vars** in Vercel → Project → Settings → Environment Variables, then **redeploy**.
-
-Your live URL: `https://your-project-name.vercel.app`
+1. Export your resume as a PDF
+2. Rename it to **`resume.pdf`** (exact name, lowercase)
+3. Drop it into `assets/`, replacing the existing file
+4. In both [`src/app/api/send-email/route.ts`](src/app/api/send-email/route.ts) and [`src/app/api/follow-up/route.ts`](src/app/api/follow-up/route.ts), update:
+   ```ts
+   const RESUME_FILENAME = "YourName_Resume.pdf";
+   ```
+5. Commit and push — Vercel auto-deploys
 
 ---
 
-## Step 5 — Test it
+## How to set up Gmail App Password
 
-**Health check** (no email sent)
+1. Go to Google Account → **Security** → **2-Step Verification** (must be on)
+2. Scroll down → **App passwords**
+3. App: Mail, Device: Other → name it "Email API" → Generate
+4. Copy the 16-character password
+5. Add to Vercel: `vercel env add GMAIL_APP_PASSWORD production`
+
+---
+
+## Dashboard
+
+Visit `https://email-api-drab.vercel.app` to see:
+
+- **Stats bar** — Total Sent, Opened, Open Rate %, Follow-ups
+- **Email table** — recipient, subject, type badge (Initial / Follow-up), sent date, open status
+- Rows turn green with an "Opened" badge when the recipient's email client loads the tracking pixel
+- Shows open count (e.g. "3× opened") if they opened it multiple times
+
+> **Note:** Open tracking requires `APP_URL` to be set and the recipient's email client to load remote images. Gmail, Outlook and most desktop clients do. Apple Mail Privacy Protection may pre-load pixels — open counts may be inflated on iPhone.
+
+**Storage:** Data is saved to `/tmp/emails.json` on Vercel. Persists while the function is warm (typically hours of activity). Resets on cold starts (when the app hasn't been used for a while). For permanent storage, add Upstash Redis (free tier at upstash.com) and set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`.
+
+---
+
+## API usage
+
+### Health check
 ```bash
-curl https://your-project-name.vercel.app/api/send-email \
-  -H "x-api-secret: YOUR_API_SECRET"
-```
-```json
-{"ok":true,"resume":"Vikas_Verma_Resume.pdf","bytes":211495,"isPdf":true,"from":"Vikas Verma <you@gmail.com>"}
+curl https://email-api-drab.vercel.app/api/send-email \
+  -H "x-api-secret: 588669bcc37128310aa33992f42f6ec2e77eac1a0495f7ea"
 ```
 
-**Send a test email to yourself**
+### Send an email
 ```bash
-curl -X POST https://your-project-name.vercel.app/api/send-email \
+curl -X POST https://email-api-drab.vercel.app/api/send-email \
   -H "Content-Type: application/json" \
-  -H "x-api-secret: YOUR_API_SECRET" \
-  -d '{"to":"you@gmail.com","subject":"Test","body":"Hello.\n\nResume is attached."}'
+  -H "x-api-secret: 588669bcc37128310aa33992f42f6ec2e77eac1a0495f7ea" \
+  -d '{
+    "to": "recruiter@company.com",
+    "subject": "SWE role at Acme",
+    "body": "Hi Sarah,\n\nI came across the opening at Acme and would love to connect.\n\nBest,\nVikas"
+  }'
 ```
 
-**Send a follow-up** (3-4 days after initial email)
+### Send a follow-up (3–4 days later)
 ```bash
-curl -X POST https://your-project-name.vercel.app/api/follow-up \
+curl -X POST https://email-api-drab.vercel.app/api/follow-up \
   -H "Content-Type: application/json" \
-  -H "x-api-secret: YOUR_API_SECRET" \
-  -d '{"to":"recruiter@company.com","original_subject":"SWE role at Acme"}'
+  -H "x-api-secret: 588669bcc37128310aa33992f42f6ec2e77eac1a0495f7ea" \
+  -d '{
+    "to": "recruiter@company.com",
+    "original_subject": "SWE role at Acme"
+  }'
 ```
-Subject becomes `Re: SWE role at Acme` — threads in their inbox.
+Subject becomes `Re: SWE role at Acme` — threads in their inbox. Pass `body` for a custom message; otherwise a default follow-up is used.
 
 ---
 
-## Step 6 — Connect your AI assistant
+## Give to your AI assistant
 
-### What to tell ChatGPT / Claude
-
-Paste this as a system prompt or in chat:
+Paste this as a system prompt:
 
 ```
 I have an email API for job search outreach. Use it to send emails on my behalf.
 
-Base URL: https://your-project-name.vercel.app
+Base URL: https://email-api-drab.vercel.app
 
 Required header on every request:
-  x-api-secret: YOUR_API_SECRET
+  x-api-secret: 588669bcc37128310aa33992f42f6ec2e77eac1a0495f7ea
 
 Send initial email:
   POST /api/send-email
   Body: { "to": "email", "subject": "subject line", "body": "plain text body" }
   My resume PDF is automatically attached to every email.
-  Emails are sent with high priority and a clean HTML layout.
+  Emails are sent with high priority and clean HTML formatting.
 
-Send follow-up (use 3-4 days after no reply):
+Send follow-up (3–4 days after no reply):
   POST /api/follow-up
   Body: { "to": "email", "original_subject": "the original subject" }
-  Optionally pass "body" for a custom message — otherwise a default follow-up is used.
+  Optionally pass "body" for a custom message.
   Subject becomes "Re: {original_subject}" so it threads in their inbox.
 
 Health check (no email sent):
   GET /api/send-email
+
+Dashboard (see what was sent and opened):
+  https://email-api-drab.vercel.app
 ```
 
 ### ChatGPT Custom GPT — Actions schema
@@ -174,7 +190,7 @@ info:
   title: Resume Email API
   version: 1.0.0
 servers:
-  - url: https://your-project-name.vercel.app
+  - url: https://email-api-drab.vercel.app
 paths:
   /api/send-email:
     post:
@@ -234,7 +250,7 @@ paths:
                   type: string
                 original_subject:
                   type: string
-                  description: The subject of the original email
+                  description: Subject of the original email
                 body:
                   type: string
                   description: Optional custom follow-up message
@@ -249,7 +265,7 @@ paths:
           description: Follow-up sent
 ```
 
-Under **Authentication** → **API Key** → **Header** → name: `x-api-secret` → paste your `API_SECRET`.
+Under **Authentication** → **API Key** → **Header** → name: `x-api-secret` → value: `588669bcc37128310aa33992f42f6ec2e77eac1a0495f7ea`
 
 ---
 
@@ -257,34 +273,34 @@ Under **Authentication** → **API Key** → **Header** → name: `x-api-secret`
 
 ### `POST /api/send-email`
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `to` | string | Yes | Recipient email address |
-| `subject` | string | Yes | Subject line |
-| `body` | string | Yes | Plain text body |
+| Field | Type | Required |
+|---|---|---|
+| `to` | string | Yes |
+| `subject` | string | Yes |
+| `body` | string | Yes |
 
 | Status | Meaning |
 |---|---|
-| 200 | Email sent |
-| 400 | Missing `to`, `subject`, or `body` |
-| 401 | Wrong or missing `x-api-secret` |
-| 500 | Resume file missing or not a valid PDF |
+| 200 | Sent |
+| 400 | Missing field |
+| 401 | Wrong `x-api-secret` |
+| 500 | Resume missing or not a valid PDF |
 
 ---
 
 ### `POST /api/follow-up`
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `to` | string | Yes | Recipient email address |
-| `original_subject` | string | Yes | Subject of the original email — prefixed with `Re:` |
-| `body` | string | No | Custom follow-up text. Default is a short "just following up" message |
+| Field | Type | Required |
+|---|---|---|
+| `to` | string | Yes |
+| `original_subject` | string | Yes |
+| `body` | string | No — default follow-up message used if omitted |
 
 ---
 
 ### `GET /api/send-email`
 
-Health check. Confirms the resume PDF is bundled and returns its byte size.
+Health check. Returns resume name, size, and `from` address.
 
 ---
 
@@ -292,16 +308,32 @@ Health check. Confirms the resume PDF is bundled and returns its byte size.
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in all 4 vars
+cp .env.example .env.local   # fill in GMAIL_APP_PASSWORD
 npm run dev
 ```
 
-API runs at `http://localhost:3000`.
+Runs at `http://localhost:3000`. Data saved to `./data/emails.json`.
 
-Test health check:
+---
+
+## Deploying changes
+
 ```bash
-curl http://localhost:3000/api/send-email \
-  -H "x-api-secret: YOUR_API_SECRET"
+git add -A && git commit -m "your message"
+git push origin main
+```
+
+Vercel auto-deploys on every push to `main`.
+
+To add or update an env var on Vercel:
+```bash
+vercel env add VAR_NAME production
+vercel env rm VAR_NAME production   # to remove
+```
+
+Then redeploy:
+```bash
+vercel --prod
 ```
 
 ---
@@ -310,8 +342,9 @@ curl http://localhost:3000/api/send-email \
 
 | Problem | Fix |
 |---|---|
-| `401 Unauthorized` | Check the `x-api-secret` header matches `API_SECRET` exactly |
-| `535 Invalid credentials` from Gmail | Re-generate the App Password; confirm 2FA is on; spaces in the password are fine |
-| `Resume file missing` in production | Make sure `assets/resume.pdf` is committed to git (check `.gitignore`) |
-| Email goes to spam | Use a custom domain with SPF/DKIM, or switch to Resend/SendGrid for cold outreach |
-| Vercel function timeout | Large PDFs + slow SMTP can hit the 10s free-tier limit — upgrade to Vercel Pro or switch SMTP provider |
+| `401 Unauthorized` | Check `x-api-secret` header matches `API_SECRET` exactly |
+| `535 Invalid credentials` | Re-generate Gmail App Password; confirm 2FA is on |
+| `Resume file missing` in prod | Ensure `assets/resume.pdf` is committed to git |
+| Dashboard shows no data | Data resets on cold starts — send an email first; for persistence add Upstash Redis |
+| Open tracking not working | Check `APP_URL` is set in Vercel env vars and redeployed |
+| Vercel function timeout | Large PDF + slow SMTP can hit the 10s free-tier limit — upgrade to Vercel Pro or switch SMTP provider |
