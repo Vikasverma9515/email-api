@@ -9,7 +9,6 @@ const GMAIL_USER = process.env.GMAIL_USER!;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD!;
 const API_SECRET = process.env.API_SECRET!;
 const FROM_NAME = process.env.FROM_NAME || GMAIL_USER;
-const APP_URL = process.env.APP_URL || "";
 
 const RESUME_PATH = path.join(process.cwd(), "assets", "resume.pdf");
 const RESUME_FILENAME = "Vikas_Verma_Resume.pdf";
@@ -19,14 +18,13 @@ const DEFAULT_BODY =
   `I'm still very interested in the opportunity and would love to connect. I've attached my resume again for reference.\n\n` +
   `Happy to jump on a quick call whenever works for you.`;
 
-
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("x-api-secret");
   if (!API_SECRET || auth !== API_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { to, original_subject, body } = await req.json();
+  const { to, original_subject, body, name, company } = await req.json();
 
   if (!to || !original_subject) {
     return NextResponse.json({ error: "Missing to or original_subject" }, { status: 400 });
@@ -42,10 +40,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Resume file is not a valid PDF" }, { status: 500 });
   }
 
-  const id = uuidv4();
   const followUpBody = body || DEFAULT_BODY;
   const subject = original_subject.startsWith("Re:") ? original_subject : `Re: ${original_subject}`;
-  const trackingPixelUrl = APP_URL ? `${APP_URL}/api/track/${id}` : "";
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -62,7 +58,16 @@ export async function POST(req: NextRequest) {
     attachments: [{ filename: RESUME_FILENAME, content: resumeBuffer, contentType: "application/pdf" }],
   });
 
-  await saveEmail({ id, to, subject, type: "followup", sentAt: new Date().toISOString(), openedAt: null, openCount: 0 });
+  saveEmail({
+    id: uuidv4(),
+    to_email: to,
+    name: name ?? null,
+    company: company ?? null,
+    subject,
+    type: "followup",
+    apply_url: null,
+    sent_at: new Date().toISOString(),
+  });
 
-  return NextResponse.json({ success: true, to, subject, id });
+  return NextResponse.json({ success: true, to, subject });
 }

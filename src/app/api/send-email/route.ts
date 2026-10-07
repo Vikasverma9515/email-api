@@ -9,11 +9,9 @@ const GMAIL_USER = process.env.GMAIL_USER!;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD!;
 const API_SECRET = process.env.API_SECRET!;
 const FROM_NAME = process.env.FROM_NAME || GMAIL_USER;
-const APP_URL = process.env.APP_URL || "";
 
 const RESUME_PATH = path.join(process.cwd(), "assets", "resume.pdf");
 const RESUME_FILENAME = "Vikas_Verma_Resume.pdf";
-
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("x-api-secret");
@@ -21,7 +19,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { to, subject, body } = await req.json();
+  // to, subject, body are required
+  // name, company, apply_url are optional but stored for tracking
+  const { to, subject, body, name, company, apply_url } = await req.json();
 
   if (!to || !subject || !body) {
     return NextResponse.json({ error: "Missing to, subject, or body" }, { status: 400 });
@@ -37,9 +37,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Resume file is not a valid PDF" }, { status: 500 });
   }
 
-  const id = uuidv4();
-  const trackingPixelUrl = APP_URL ? `${APP_URL}/api/track/${id}` : "";
-
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD.replace(/\s/g, "") },
@@ -51,17 +48,22 @@ export async function POST(req: NextRequest) {
     subject,
     text: body,
     priority: "high",
-    headers: {
-      "X-Mailer": "Personal Mailer",
-      "Precedence": "personal",
-      ...(trackingPixelUrl ? { "X-Track": trackingPixelUrl } : {}),
-    },
+    headers: { "X-Mailer": "Personal Mailer", "Precedence": "personal" },
     attachments: [{ filename: RESUME_FILENAME, content: resumeBuffer, contentType: "application/pdf" }],
   });
 
-  await saveEmail({ id, to, subject, type: "initial", sentAt: new Date().toISOString(), openedAt: null, openCount: 0 });
+  saveEmail({
+    id: uuidv4(),
+    to_email: to,
+    name: name ?? null,
+    company: company ?? null,
+    subject,
+    type: "initial",
+    apply_url: apply_url ?? null,
+    sent_at: new Date().toISOString(),
+  });
 
-  return NextResponse.json({ success: true, to, subject, id });
+  return NextResponse.json({ success: true, to, subject });
 }
 
 export async function GET(req: NextRequest) {

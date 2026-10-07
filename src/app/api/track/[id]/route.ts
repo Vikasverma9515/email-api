@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { markOpened } from "@/lib/db";
 
-// 1×1 transparent GIF
+// Tracking pixel kept as a no-op route — open tracking removed
 const PIXEL = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  // Fire-and-forget — don't let a DB error break the pixel response
-  markOpened(params.id).catch(() => {});
-
+export async function GET(_req: NextRequest) {
   return new NextResponse(PIXEL, {
     status: 200,
     headers: {
