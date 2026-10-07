@@ -11,7 +11,7 @@ function auth(req: NextRequest) {
 // GET — list all saved jobs
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json(getAllJobs());
+  return NextResponse.json(await getAllJobs());
 }
 
 // POST — Claude saves a job it found
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     found_at: new Date().toISOString(),
   };
 
-  saveJob(record);
+  await saveJob(record);
   return NextResponse.json({ success: true, ...record });
 }
 
@@ -46,6 +46,6 @@ export async function PATCH(req: NextRequest) {
   const { id, status } = await req.json();
   if (!id || !status) return NextResponse.json({ error: "Missing id or status" }, { status: 400 });
 
-  updateJobStatus(id, status);
+  await updateJobStatus(id, status);
   return NextResponse.json({ success: true });
 }

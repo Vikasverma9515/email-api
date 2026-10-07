@@ -17,17 +17,14 @@ function avatarColor(str: string) {
   return colors[Math.abs(h) % colors.length];
 }
 
-export default function Dashboard() {
-  let stats = { total: 0, companies: 0, followups: 0, to_apply: 0, total_jobs: 0, pending_jobs: 0 };
-  let companies: ReturnType<typeof getCompanies> = [];
-  let emails: ReturnType<typeof getAllEmails> = [];
-  let jobs: ReturnType<typeof getAllJobs> = [];
+export default async function Dashboard() {
+  let stats = { total: 0, companies: 0, followups: 0, total_jobs: 0, pending_jobs: 0 };
+  let companies: Awaited<ReturnType<typeof getCompanies>> = [];
+  let emails: Awaited<ReturnType<typeof getAllEmails>> = [];
+  let jobs: Awaited<ReturnType<typeof getAllJobs>> = [];
 
   try {
-    stats = getStats();
-    companies = getCompanies();
-    emails = getAllEmails();
-    jobs = getAllJobs();
+    [stats, companies, emails, jobs] = await Promise.all([getStats(), getCompanies(), getAllEmails(), getAllJobs()]);
   } catch {
     // DB not ready yet
   }

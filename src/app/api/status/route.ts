@@ -10,9 +10,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const stats = getStats();
-  const emails = getAllEmails();
-  const jobs = getAllJobs();
+  const [stats, emails, jobs] = await Promise.all([getStats(), getAllEmails(), getAllJobs()]);
 
   // Deduplicated list of companies already emailed — Claude should never re-email these
   const companyMap = new Map<string, { company: string | null; email: string; name: string | null; last_contacted: string }>();

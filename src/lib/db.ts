@@ -1,37 +1,15 @@
-import Database from "better-sqlite3";
-import path from "path";
-import { mkdirSync } from "fs";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const DB_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DB_DIR, "emails.db");
-
-mkdirSync(DB_DIR, { recursive: true });
-
-const db = new Database(DB_PATH);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS emails (
-    id          TEXT PRIMARY KEY,
-    to_email    TEXT NOT NULL,
-    name        TEXT,
-    company     TEXT,
-    subject     TEXT NOT NULL,
-    type        TEXT NOT NULL DEFAULT 'initial',
-    apply_url   TEXT,
-    sent_at     TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS jobs (
-    id          TEXT PRIMARY KEY,
-    company     TEXT NOT NULL,
-    role        TEXT NOT NULL,
-    url         TEXT NOT NULL,
-    source      TEXT,
-    notes       TEXT,
-    status      TEXT NOT NULL DEFAULT 'to_apply',
-    found_at    TEXT NOT NULL
-  );
-`);
+let _client: SupabaseClient | null = null;
+function db() {
+  if (!_client) {
+    _client = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return _client;
+}
 
 export interface EmailRecord {
   id: string;
@@ -42,41 +20,6 @@ export interface EmailRecord {
   type: "initial" | "followup";
   apply_url: string | null;
   sent_at: string;
-}
-
-export interface CompanyRow {
-  company: string;
-  recruiter_name: string | null;
-  recruiter_email: string;
-  apply_url: string | null;
-  last_contacted: string;
-  email_count: number;
-}
-
-export function saveEmail(record: EmailRecord): void {
-  db.prepare(`
-    INSERT INTO emails (id, to_email, name, company, subject, type, apply_url, sent_at)
-    VALUES (@id, @to_email, @name, @company, @subject, @type, @apply_url, @sent_at)
-  `).run(record);
-}
-
-export function getAllEmails(): EmailRecord[] {
-  return db.prepare(`SELECT * FROM emails ORDER BY sent_at DESC`).all() as EmailRecord[];
-}
-
-export function getCompanies(): CompanyRow[] {
-  return db.prepare(`
-    SELECT
-      COALESCE(company, to_email)        AS company,
-      MAX(name)                          AS recruiter_name,
-      to_email                           AS recruiter_email,
-      MAX(apply_url)                     AS apply_url,
-      MAX(sent_at)                       AS last_contacted,
-      COUNT(*)                           AS email_count
-    FROM emails
-    GROUP BY COALESCE(company, to_email)
-    ORDER BY last_contacted DESC
-  `).all() as CompanyRow[];
 }
 
 export interface JobRecord {
@@ -90,37 +33,79 @@ export interface JobRecord {
   found_at: string;
 }
 
-export function saveJob(record: JobRecord): void {
-  db.prepare(`
-    INSERT OR IGNORE INTO jobs (id, company, role, url, source, notes, status, found_at)
-    VALUES (@id, @company, @role, @url, @source, @notes, @status, @found_at)
-  `).run(record);
+export interface CompanyRow {
+  company: string;
+  recruiter_name: string | null;
+  recruiter_email: string;
+  apply_url: string | null;
+  last_contacted: string;
+  email_count: number;
 }
 
-export function getAllJobs(): JobRecord[] {
-  return db.prepare(`SELECT * FROM jobs ORDER BY found_at DESC`).all() as JobRecord[];
+export async function saveEmail(record: EmailRecord): Promise<void> {
+  await db().from("emails").insert(record);
 }
 
-export function updateJobStatus(id: string, status: string): void {
-  db.prepare(`UPDATE jobs SET status = ? WHERE id = ?`).run(status, id);
+export async function getAllEmails(): Promise<EmailRecord[]> {
+  const { data } = await db()
+    .from("emails")
+    .select("*")
+    .order("sent_at", { ascending: false });
+  return (data ?? []) as EmailRecord[];
 }
 
-export function getStats() {
-  const row = db.prepare(`
-    SELECT
-      COUNT(*)                                    AS total,
-      COUNT(DISTINCT COALESCE(company, to_email)) AS companies,
-      SUM(CASE WHEN type = 'followup' THEN 1 ELSE 0 END) AS followups,
-      COUNT(DISTINCT CASE WHEN apply_url IS NOT NULL THEN COALESCE(company, to_email) END) AS to_apply
-    FROM emails
-  `).get() as { total: number; companies: number; followups: number; to_apply: number };
+export async function getCompanies(): Promise<CompanyRow[]> {
+  const emails = await getAllEmails();
+  const map = new Map<string, CompanyRow>();
+  for (const e of emails) {
+    const key = e.company ?? e.to_email;
+    if (!map.has(key)) {
+      map.set(key, {
+        company: e.company ?? e.to_email,
+        recruiter_name: e.name,
+        recruiter_email: e.to_email,
+        apply_url: e.apply_url,
+        last_contacted: e.sent_at,
+        email_count: 1,
+      });
+    } else {
+      map.get(key)!.email_count++;
+    }
+  }
+  return Array.from(map.values());
+}
 
-  const jobStats = db.prepare(`
-    SELECT
-      COUNT(*) AS total_jobs,
-      SUM(CASE WHEN status = 'to_apply' THEN 1 ELSE 0 END) AS pending_jobs
-    FROM jobs
-  `).get() as { total_jobs: number; pending_jobs: number };
+export async function saveJob(record: JobRecord): Promise<void> {
+  await db().from("jobs").insert(record);
+}
 
-  return { ...row, ...jobStats };
+export async function getAllJobs(): Promise<JobRecord[]> {
+  const { data } = await db()
+    .from("jobs")
+    .select("*")
+    .order("found_at", { ascending: false });
+  return (data ?? []) as JobRecord[];
+}
+
+export async function updateJobStatus(id: string, status: string): Promise<void> {
+  await db().from("jobs").update({ status }).eq("id", id);
+}
+
+export async function getStats() {
+  const [{ count: total }, { count: followups }, jobs] = await Promise.all([
+    db().from("emails").select("*", { count: "exact", head: true }),
+    db().from("emails").select("*", { count: "exact", head: true }).eq("type", "followup"),
+    db().from("jobs").select("status"),
+  ]);
+
+  const allJobs = (jobs.data ?? []) as { status: string }[];
+  const companies = await getCompanies();
+
+  return {
+    total: total ?? 0,
+    companies: companies.length,
+    followups: followups ?? 0,
+    total_jobs: allJobs.length,
+    pending_jobs: allJobs.filter((j) => j.status === "to_apply").length,
+  };
 }

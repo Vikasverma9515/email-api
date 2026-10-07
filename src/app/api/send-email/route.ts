@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     attachments: [{ filename: RESUME_FILENAME, content: resumeBuffer, contentType: "application/pdf" }],
   });
 
-  saveEmail({
+  await saveEmail({
     id: uuidv4(),
     to_email: to,
     name: name ?? null,
