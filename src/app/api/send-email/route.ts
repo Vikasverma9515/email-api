@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { readFile } from "fs/promises";
 import path from "path";
-import { logEmail, isDuplicate, getDailyCount, DAILY_LIMIT } from "@/lib/sheets";
 
 const GMAIL_USER = process.env.GMAIL_USER!;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD!;
@@ -52,25 +51,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing to, subject, or body" }, { status: 400 });
   }
 
-  // --- Daily cap ---
-  const todayCount = await getDailyCount();
-  if (todayCount >= DAILY_LIMIT) {
-    return NextResponse.json(
-      { error: `Daily limit reached (${DAILY_LIMIT}/day). Try again tomorrow.`, sent_today: todayCount },
-      { status: 429 }
-    );
-  }
-
-  // --- Duplicate guard ---
-  const alreadySent = await isDuplicate(to);
-  if (alreadySent) {
-    return NextResponse.json(
-      { error: `Already emailed ${to} in the last 30 days. Use /api/follow-up instead.` },
-      { status: 409 }
-    );
-  }
-
-  // --- Resume ---
   let resumeBuffer: Buffer;
   try {
     resumeBuffer = await readFile(RESUME_PATH);
@@ -81,7 +61,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Resume file is not a valid PDF" }, { status: 500 });
   }
 
-  // --- Send ---
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD.replace(/\s/g, "") },
@@ -98,10 +77,7 @@ export async function POST(req: NextRequest) {
     attachments: [{ filename: RESUME_FILENAME, content: resumeBuffer, contentType: "application/pdf" }],
   });
 
-  // --- Log to sheet ---
-  await logEmail(to, subject, "initial");
-
-  return NextResponse.json({ success: true, to, subject, sent_today: todayCount + 1 });
+  return NextResponse.json({ success: true, to, subject });
 }
 
 export async function GET(req: NextRequest) {
@@ -109,17 +85,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const [buf, todayCount] = await Promise.all([readFile(RESUME_PATH), getDailyCount()]);
+    const buf = await readFile(RESUME_PATH);
     return NextResponse.json({
       ok: true,
       resume: RESUME_FILENAME,
       bytes: buf.length,
       isPdf: buf.subarray(0, 5).toString() === "%PDF-",
       from: `${FROM_NAME} <${GMAIL_USER}>`,
-      sent_today: todayCount,
-      daily_limit: DAILY_LIMIT,
     });
   } catch {
-    return NextResponse.json({ ok: false, error: "Resume file missing or sheet unreachable" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "Resume file missing" }, { status: 500 });
   }
 }

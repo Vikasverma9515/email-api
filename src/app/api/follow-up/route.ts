@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { readFile } from "fs/promises";
 import path from "path";
-import { logEmail, getDailyCount, DAILY_LIMIT } from "@/lib/sheets";
 
 const GMAIL_USER = process.env.GMAIL_USER!;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD!;
@@ -12,7 +11,7 @@ const FROM_NAME = process.env.FROM_NAME || GMAIL_USER;
 const RESUME_PATH = path.join(process.cwd(), "assets", "resume.pdf");
 const RESUME_FILENAME = "Vikas_Verma_Resume.pdf";
 
-const DEFAULT_FOLLOWUP_BODY =
+const DEFAULT_BODY =
   `Just wanted to follow up on my previous email in case it got buried.\n\n` +
   `I'm still very interested in the opportunity and would love to connect. I've attached my resume again for reference.\n\n` +
   `Happy to jump on a quick call whenever works for you.`;
@@ -51,23 +50,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // original_subject is used to build "Re: ..." so it threads in email clients
   const { to, original_subject, body } = await req.json();
 
   if (!to || !original_subject) {
     return NextResponse.json({ error: "Missing to or original_subject" }, { status: 400 });
   }
 
-  // --- Daily cap (shared with send-email) ---
-  const todayCount = await getDailyCount();
-  if (todayCount >= DAILY_LIMIT) {
-    return NextResponse.json(
-      { error: `Daily limit reached (${DAILY_LIMIT}/day). Try again tomorrow.`, sent_today: todayCount },
-      { status: 429 }
-    );
-  }
-
-  // --- Resume ---
   let resumeBuffer: Buffer;
   try {
     resumeBuffer = await readFile(RESUME_PATH);
@@ -78,12 +66,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Resume file is not a valid PDF" }, { status: 500 });
   }
 
-  const followUpBody = body || DEFAULT_FOLLOWUP_BODY;
-  const followUpSubject = original_subject.startsWith("Re:")
+  const followUpBody = body || DEFAULT_BODY;
+  const subject = original_subject.startsWith("Re:")
     ? original_subject
     : `Re: ${original_subject}`;
 
-  // --- Send ---
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD.replace(/\s/g, "") },
@@ -92,7 +79,7 @@ export async function POST(req: NextRequest) {
   await transporter.sendMail({
     from: `"${FROM_NAME}" <${GMAIL_USER}>`,
     to,
-    subject: followUpSubject,
+    subject,
     text: followUpBody,
     html: wrapHtml(FROM_NAME, GMAIL_USER, followUpBody),
     priority: "high",
@@ -100,8 +87,5 @@ export async function POST(req: NextRequest) {
     attachments: [{ filename: RESUME_FILENAME, content: resumeBuffer, contentType: "application/pdf" }],
   });
 
-  // --- Log to sheet ---
-  await logEmail(to, followUpSubject, "followup");
-
-  return NextResponse.json({ success: true, to, subject: followUpSubject, sent_today: todayCount + 1 });
+  return NextResponse.json({ success: true, to, subject });
 }
