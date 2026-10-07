@@ -14,34 +14,6 @@ const APP_URL = process.env.APP_URL || "";
 const RESUME_PATH = path.join(process.cwd(), "assets", "resume.pdf");
 const RESUME_FILENAME = "Vikas_Verma_Resume.pdf";
 
-function wrapHtml(senderName: string, senderEmail: string, body: string, trackingPixelUrl: string): string {
-  const paragraphs = body
-    .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 14px 0;line-height:1.6">${p.replace(/\n/g, "<br>")}</p>`)
-    .join("\n");
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;font-size:15px;color:#222">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 0">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:6px;padding:40px 48px;max-width:600px">
-        <tr><td>
-          ${paragraphs}
-          <hr style="border:none;border-top:1px solid #eee;margin:28px 0">
-          <p style="margin:0;font-size:13px;color:#888">
-            ${senderName}<br>
-            <a href="mailto:${senderEmail}" style="color:#888">${senderEmail}</a>
-          </p>
-          ${trackingPixelUrl ? `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;width:1px;height:1px" alt="">` : ""}
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
-}
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("x-api-secret");
@@ -78,9 +50,12 @@ export async function POST(req: NextRequest) {
     to,
     subject,
     text: body,
-    html: wrapHtml(FROM_NAME, GMAIL_USER, body, trackingPixelUrl),
     priority: "high",
-    headers: { "X-Mailer": "Personal Mailer", "Precedence": "personal" },
+    headers: {
+      "X-Mailer": "Personal Mailer",
+      "Precedence": "personal",
+      ...(trackingPixelUrl ? { "X-Track": trackingPixelUrl } : {}),
+    },
     attachments: [{ filename: RESUME_FILENAME, content: resumeBuffer, contentType: "application/pdf" }],
   });
 
