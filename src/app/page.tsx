@@ -2,19 +2,50 @@ import { getAllEmails, getCompanies, getStats, getAllJobs } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function initials(str: string) {
-  return str.split(/[\s@]/)[0].slice(0, 2).toUpperCase();
+function initials(s: string) {
+  return s.split(/[\s@]/)[0].slice(0, 2).toUpperCase();
 }
 
-function avatarColor(str: string) {
-  const colors = ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444","#14b8a6"];
+function hue(s: string) {
+  const palette = ["#6366f1","#8b5cf6","#0ea5e9","#10b981","#f59e0b","#ef4444","#ec4899","#14b8a6"];
   let h = 0;
-  for (const c of str) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
-  return colors[Math.abs(h) % colors.length];
+  for (const c of s) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
+  return palette[Math.abs(h) % palette.length];
+}
+
+function Avatar({ name, size = 28 }: { name: string; size?: number }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: size, height: size, borderRadius: 6, flexShrink: 0,
+      background: hue(name), color: "#fff", fontSize: size * 0.38, fontWeight: 700,
+    }}>
+      {initials(name)}
+    </span>
+  );
+}
+
+function Badge({ label, color }: { label: string; color: "blue" | "purple" | "green" | "amber" | "slate" }) {
+  const map = {
+    blue:   { bg: "var(--badge-blue-bg)",   fg: "var(--badge-blue-fg)"   },
+    purple: { bg: "var(--badge-purple-bg)", fg: "var(--badge-purple-fg)" },
+    green:  { bg: "var(--badge-green-bg)",  fg: "var(--badge-green-fg)"  },
+    amber:  { bg: "var(--badge-amber-bg)",  fg: "var(--badge-amber-fg)"  },
+    slate:  { bg: "var(--badge-slate-bg)",  fg: "var(--badge-slate-fg)"  },
+  };
+  return (
+    <span style={{
+      display: "inline-block", padding: "2px 8px", borderRadius: 20,
+      fontSize: 11, fontWeight: 600, letterSpacing: ".02em",
+      background: map[color].bg, color: map[color].fg,
+    }}>
+      {label}
+    </span>
+  );
 }
 
 export default async function Dashboard() {
@@ -24,153 +55,307 @@ export default async function Dashboard() {
   let jobs: Awaited<ReturnType<typeof getAllJobs>> = [];
 
   try {
-    [stats, companies, emails, jobs] = await Promise.all([getStats(), getCompanies(), getAllEmails(), getAllJobs()]);
+    [stats, companies, emails, jobs] = await Promise.all([
+      getStats(), getCompanies(), getAllEmails(), getAllJobs(),
+    ]);
   } catch {
-    // DB not ready yet
+    // DB not ready
   }
 
-  return (
-    <html lang="en">
-      <head>
-        <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Email Tracker</title>
-      </head>
-      <body style={{ margin: 0, padding: 0, background: "#f8fafc", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#1e293b", fontSize: 14 }}>
+  const css = `
+    :root {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --fg: #0f172a;
+      --muted: #64748b;
+      --accent: #4f46e5;
+      --accent-subtle: #eef2ff;
+      --row-hover: #f8fafc;
 
-        {/* Header */}
-        <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "0 32px" }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 32, height: 32, background: "#6366f1", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✉</div>
-              <span style={{ fontWeight: 700, fontSize: 17 }}>Email Tracker</span>
+      --badge-blue-bg:#dbeafe; --badge-blue-fg:#1d4ed8;
+      --badge-purple-bg:#ede9fe; --badge-purple-fg:#6d28d9;
+      --badge-green-bg:#d1fae5; --badge-green-fg:#065f46;
+      --badge-amber-bg:#fef3c7; --badge-amber-fg:#92400e;
+      --badge-slate-bg:#f1f5f9; --badge-slate-fg:#475569;
+    }
+    @media(prefers-color-scheme:dark){
+      :root:not([data-theme="light"]){
+        --bg:#0f172a; --surface:#1e293b; --border:#334155;
+        --fg:#f1f5f9; --muted:#94a3b8; --accent:#818cf8; --accent-subtle:#1e1b4b;
+        --row-hover:#263044;
+        --badge-blue-bg:#1e3a5f; --badge-blue-fg:#93c5fd;
+        --badge-purple-bg:#2e1065; --badge-purple-fg:#c4b5fd;
+        --badge-green-bg:#064e3b; --badge-green-fg:#6ee7b7;
+        --badge-amber-bg:#451a03; --badge-amber-fg:#fcd34d;
+        --badge-slate-bg:#1e293b; --badge-slate-fg:#94a3b8;
+        color-scheme:dark;
+      }
+    }
+    :root[data-theme="dark"]{
+      --bg:#0f172a; --surface:#1e293b; --border:#334155;
+      --fg:#f1f5f9; --muted:#94a3b8; --accent:#818cf8; --accent-subtle:#1e1b4b;
+      --row-hover:#263044;
+      --badge-blue-bg:#1e3a5f; --badge-blue-fg:#93c5fd;
+      --badge-purple-bg:#2e1065; --badge-purple-fg:#c4b5fd;
+      --badge-green-bg:#064e3b; --badge-green-fg:#6ee7b7;
+      --badge-amber-bg:#451a03; --badge-amber-fg:#fcd34d;
+      --badge-slate-bg:#1e293b; --badge-slate-fg:#94a3b8;
+      color-scheme:dark;
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;line-height:1.5}
+
+    /* ── topbar ── */
+    .topbar{
+      background:var(--surface);border-bottom:1px solid var(--border);
+      position:sticky;top:0;z-index:10;
+      padding:0 24px;
+      display:flex;align-items:center;justify-content:space-between;height:52px;
+    }
+    .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
+    .logo-icon{width:28px;height:28px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+    .stats-row{display:flex;align-items:center;gap:6px}
+    .stat-chip{
+      display:flex;align-items:center;gap:5px;
+      padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;
+      background:var(--bg);border:1px solid var(--border);
+      font-variant-numeric:tabular-nums;
+    }
+    .stat-chip .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+    .user-label{font-size:12px;color:var(--muted);display:none}
+    @media(min-width:700px){.user-label{display:block}}
+
+    /* ── tabs ── */
+    .tabbar{
+      background:var(--surface);border-bottom:1px solid var(--border);
+      padding:0 24px;display:flex;gap:0;
+    }
+    .tab{
+      padding:10px 16px;font-size:13px;font-weight:500;color:var(--muted);
+      border-bottom:2px solid transparent;cursor:pointer;
+      transition:color .15s,border-color .15s;white-space:nowrap;
+    }
+    .tab:hover{color:var(--fg)}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+
+    /* ── content ── */
+    .content{max-width:1100px;margin:0 auto;padding:20px 24px}
+    .panel{display:none}
+    .panel.active{display:block}
+
+    /* ── card ── */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+    .card-header{
+      padding:12px 18px;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;
+    }
+    .card-title{font-weight:600;font-size:13px}
+    .card-count{font-size:12px;color:var(--muted)}
+
+    /* ── table ── */
+    table{width:100%;border-collapse:collapse}
+    th{
+      padding:8px 16px;text-align:left;font-size:10.5px;font-weight:600;
+      color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+      background:var(--bg);border-bottom:1px solid var(--border);
+    }
+    td{padding:9px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:var(--row-hover)}
+    .cell-main{font-weight:500}
+    .cell-sub{font-size:11px;color:var(--muted);margin-top:1px}
+
+    /* ── avatar row ── */
+    .with-avatar{display:flex;align-items:center;gap:8px}
+
+    /* ── apply btn ── */
+    .btn-apply{
+      display:inline-block;padding:3px 10px;border-radius:5px;
+      font-size:11px;font-weight:600;text-decoration:none;
+      background:var(--accent);color:#fff;
+    }
+    .btn-apply:hover{opacity:.85}
+
+    /* ── empty ── */
+    .empty{padding:40px 20px;text-align:center;color:var(--muted)}
+    .empty-icon{font-size:26px;margin-bottom:8px}
+    .empty-label{font-weight:500;font-size:13px;margin-bottom:4px}
+    .empty-hint{font-size:12px}
+
+    /* ── skipped row ── */
+    .row-skip{opacity:.45}
+
+    /* ── num ── */
+    .num{font-variant-numeric:tabular-nums}
+  `;
+
+  const tabScript = `
+    (function(){
+      var tabs = document.querySelectorAll('.tab');
+      var panels = document.querySelectorAll('.panel');
+      tabs.forEach(function(t){
+        t.addEventListener('click', function(){
+          var id = t.dataset.panel;
+          tabs.forEach(function(x){ x.classList.toggle('active', x===t); });
+          panels.forEach(function(p){ p.classList.toggle('active', p.id===id); });
+          try{ localStorage.setItem('et_tab', id); }catch(e){}
+        });
+      });
+      try{
+        var saved = localStorage.getItem('et_tab');
+        if(saved){
+          var t = document.querySelector('[data-panel="'+saved+'"]');
+          if(t) t.click();
+        }
+      }catch(e){}
+    })();
+  `;
+
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: css }} />
+
+      {/* Topbar */}
+      <header className="topbar">
+        <div className="logo">
+          <div className="logo-icon">✉</div>
+          Email Tracker
+        </div>
+
+        <div className="stats-row">
+          {[
+            { label: "Sent",      value: stats.total,        color: "#4f46e5" },
+            { label: "Companies", value: stats.companies,    color: "#0ea5e9" },
+            { label: "Follow-ups",value: stats.followups,    color: "#8b5cf6" },
+            { label: "Jobs",      value: stats.total_jobs,   color: "#10b981" },
+            { label: "Pending",   value: stats.pending_jobs, color: "#f59e0b" },
+          ].map(s => (
+            <div className="stat-chip num" key={s.label}>
+              <span className="dot" style={{ background: s.color }} />
+              <span style={{ color: "var(--muted)", fontWeight: 400 }}>{s.label}</span>
+              <span style={{ color: "var(--fg)" }}>{s.value}</span>
             </div>
-            <span style={{ fontSize: 13, color: "#64748b" }}>{process.env.GMAIL_USER}</span>
+          ))}
+        </div>
+
+        <span className="user-label">{process.env.GMAIL_USER}</span>
+      </header>
+
+      {/* Tabs */}
+      <nav className="tabbar">
+        <div className="tab active" data-panel="p-companies">
+          Companies <span style={{ marginLeft: 4, color: "var(--muted)", fontWeight: 400 }}>{stats.companies}</span>
+        </div>
+        <div className="tab" data-panel="p-jobs">
+          Jobs to Apply <span style={{ marginLeft: 4, color: "var(--muted)", fontWeight: 400 }}>{stats.pending_jobs} pending</span>
+        </div>
+        <div className="tab" data-panel="p-emails">
+          Email Log <span style={{ marginLeft: 4, color: "var(--muted)", fontWeight: 400 }}>{stats.total}</span>
+        </div>
+      </nav>
+
+      <main className="content">
+
+        {/* — Companies — */}
+        <div id="p-companies" className="panel active">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">Companies Contacted</span>
+              <span className="card-count">{stats.companies} total</span>
+            </div>
+            {companies.length === 0 ? (
+              <div className="empty">
+                <div className="empty-icon">🏢</div>
+                <div className="empty-label">No companies yet</div>
+                <div className="empty-hint">Pass a "company" field when sending emails</div>
+              </div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Recruiter</th>
+                    <th>Email</th>
+                    <th>Last Contact</th>
+                    <th>Emails</th>
+                    <th>Apply</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {companies.map(c => (
+                    <tr key={c.company}>
+                      <td>
+                        <div className="with-avatar">
+                          <Avatar name={c.company} />
+                          <span className="cell-main">{c.company}</span>
+                        </div>
+                      </td>
+                      <td>{c.recruiter_name || <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                      <td style={{ color: "var(--muted)" }}>{c.recruiter_email}</td>
+                      <td className="num" style={{ color: "var(--muted)" }}>{fmtDate(c.last_contacted)}</td>
+                      <td>
+                        <Badge label={String(c.email_count)} color="blue" />
+                      </td>
+                      <td>
+                        {c.apply_url
+                          ? <a href={c.apply_url} target="_blank" rel="noreferrer" className="btn-apply">Apply →</a>
+                          : <span style={{ color: "var(--muted)" }}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px" }}>
-
-          {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 28 }}>
-            {[
-              { label: "Emails Sent",    value: stats.total,        color: "#6366f1" },
-              { label: "Companies",      value: stats.companies,    color: "#3b82f6" },
-              { label: "Follow-ups",     value: stats.followups,    color: "#8b5cf6" },
-              { label: "Jobs Found",     value: stats.total_jobs,   color: "#10b981" },
-              { label: "Yet to Apply",   value: stats.pending_jobs, color: "#f59e0b" },
-            ].map((s) => (
-              <div key={s.label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "18px 22px" }}>
-                <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{s.label}</div>
-                <div style={{ fontSize: 30, fontWeight: 700, color: s.color }}>{s.value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Companies */}
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
-            <div style={{ padding: "18px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>Companies</span>
-              <span style={{ fontSize: 13, color: "#64748b" }}>{stats.companies} contacted</span>
+        {/* — Jobs — */}
+        <div id="p-jobs" className="panel">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">Jobs to Apply</span>
+              <span className="card-count">{stats.pending_jobs} pending · {stats.total_jobs} total</span>
             </div>
-
-            {companies.length === 0 ? (
-              <div style={{ padding: "48px 24px", textAlign: "center", color: "#94a3b8" }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🏢</div>
-                <div style={{ fontWeight: 500 }}>No companies yet</div>
-                <div style={{ fontSize: 13, marginTop: 4 }}>Pass "company" field when sending emails</div>
-              </div>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    {["Company", "Recruiter", "Email", "Last Contacted", "Emails", "Apply Link"].map((h) => (
-                      <th key={h} style={{ padding: "11px 20px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {companies.map((c, i) => (
-                    <tr key={c.company} style={{ borderBottom: i < companies.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                      <td style={{ padding: "13px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: 8, background: avatarColor(c.company), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                            {initials(c.company)}
-                          </div>
-                          <span style={{ fontWeight: 600 }}>{c.company}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "13px 20px", color: "#334155" }}>{c.recruiter_name || <span style={{ color: "#94a3b8" }}>—</span>}</td>
-                      <td style={{ padding: "13px 20px", color: "#334155" }}>{c.recruiter_email}</td>
-                      <td style={{ padding: "13px 20px", color: "#334155" }}>{formatDate(c.last_contacted)}</td>
-                      <td style={{ padding: "13px 20px" }}>
-                        <span style={{ display: "inline-block", background: "#eff6ff", color: "#3b82f6", borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{c.email_count}</span>
-                      </td>
-                      <td style={{ padding: "13px 20px" }}>
-                        {c.apply_url ? (
-                          <a href={c.apply_url} target="_blank" rel="noreferrer" style={{ display: "inline-block", background: "#6366f1", color: "#fff", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                            Apply →
-                          </a>
-                        ) : (
-                          <span style={{ color: "#94a3b8", fontSize: 13 }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Jobs to Apply */}
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
-            <div style={{ padding: "18px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>Jobs to Apply</span>
-              <span style={{ fontSize: 13, color: "#64748b" }}>{stats.pending_jobs} pending · {stats.total_jobs} total</span>
-            </div>
-
             {jobs.length === 0 ? (
-              <div style={{ padding: "48px 24px", textAlign: "center", color: "#94a3b8" }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-                <div style={{ fontWeight: 500 }}>No jobs saved yet</div>
-                <div style={{ fontSize: 13, marginTop: 4 }}>Tell Claude to save jobs via POST /api/jobs</div>
+              <div className="empty">
+                <div className="empty-icon">🔍</div>
+                <div className="empty-label">No jobs saved yet</div>
+                <div className="empty-hint">POST /api/jobs to save a job</div>
               </div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <table>
                 <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    {["Company", "Role", "Source", "Found", "Status", "Link"].map((h) => (
-                      <th key={h} style={{ padding: "11px 20px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>{h}</th>
-                    ))}
+                  <tr>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th>Source</th>
+                    <th>Found</th>
+                    <th>Status</th>
+                    <th>Link</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {jobs.map((j, i) => (
-                    <tr key={j.id} style={{ borderBottom: i < jobs.length - 1 ? "1px solid #f1f5f9" : "none", opacity: j.status === "skip" ? 0.45 : 1 }}>
-                      <td style={{ padding: "12px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                          <div style={{ width: 30, height: 30, borderRadius: 6, background: avatarColor(j.company), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                            {initials(j.company)}
-                          </div>
-                          <span style={{ fontWeight: 600 }}>{j.company}</span>
+                  {jobs.map(j => (
+                    <tr key={j.id} className={j.status === "skip" ? "row-skip" : ""}>
+                      <td>
+                        <div className="with-avatar">
+                          <Avatar name={j.company} size={26} />
+                          <span className="cell-main">{j.company}</span>
                         </div>
                       </td>
-                      <td style={{ padding: "12px 20px", color: "#334155" }}>{j.role}</td>
-                      <td style={{ padding: "12px 20px", color: "#64748b", fontSize: 13 }}>{j.source || <span style={{ color: "#94a3b8" }}>—</span>}</td>
-                      <td style={{ padding: "12px 20px", color: "#64748b", fontSize: 13 }}>{formatDate(j.found_at)}</td>
-                      <td style={{ padding: "12px 20px" }}>
-                        <span style={{
-                          display: "inline-block", padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500,
-                          background: j.status === "applied" ? "#ecfdf5" : j.status === "skip" ? "#f1f5f9" : "#fefce8",
-                          color: j.status === "applied" ? "#10b981" : j.status === "skip" ? "#94a3b8" : "#ca8a04",
-                        }}>
-                          {j.status === "applied" ? "Applied" : j.status === "skip" ? "Skipped" : "To Apply"}
-                        </span>
+                      <td>{j.role}</td>
+                      <td style={{ color: "var(--muted)" }}>{j.source || "—"}</td>
+                      <td className="num" style={{ color: "var(--muted)" }}>{fmtDate(j.found_at)}</td>
+                      <td>
+                        <Badge
+                          label={j.status === "applied" ? "Applied" : j.status === "skip" ? "Skipped" : "To Apply"}
+                          color={j.status === "applied" ? "green" : j.status === "skip" ? "slate" : "amber"}
+                        />
                       </td>
-                      <td style={{ padding: "12px 20px" }}>
-                        <a href={j.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", background: "#10b981", color: "#fff", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                          Apply →
-                        </a>
+                      <td>
+                        <a href={j.url} target="_blank" rel="noreferrer" className="btn-apply">Apply →</a>
                       </td>
                     </tr>
                   ))}
@@ -178,59 +363,61 @@ export default async function Dashboard() {
               </table>
             )}
           </div>
+        </div>
 
-          {/* Email Log */}
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
-            <div style={{ padding: "18px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>Email Log</span>
-              <span style={{ fontSize: 13, color: "#64748b" }}>{stats.total} total</span>
+        {/* — Email Log — */}
+        <div id="p-emails" className="panel">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">Email Log</span>
+              <span className="card-count">{stats.total} total</span>
             </div>
-
             {emails.length === 0 ? (
-              <div style={{ padding: "48px 24px", textAlign: "center", color: "#94a3b8" }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-                <div style={{ fontWeight: 500 }}>No emails sent yet</div>
-                <div style={{ fontSize: 13, marginTop: 4 }}>Call POST /api/send-email to get started</div>
+              <div className="empty">
+                <div className="empty-icon">📭</div>
+                <div className="empty-label">No emails sent yet</div>
+                <div className="empty-hint">POST /api/send-email to get started</div>
               </div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <table>
                 <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    {["Recipient", "Company", "Subject", "Type", "Date"].map((h) => (
-                      <th key={h} style={{ padding: "11px 20px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>{h}</th>
-                    ))}
+                  <tr>
+                    <th>Recipient</th>
+                    <th>Company</th>
+                    <th>Subject</th>
+                    <th>Type</th>
+                    <th>Date</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {emails.map((e, i) => (
-                    <tr key={e.id} style={{ borderBottom: i < emails.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                      <td style={{ padding: "12px 20px" }}>
-                        <div style={{ fontWeight: 500 }}>{e.name || e.to_email}</div>
-                        {e.name && <div style={{ fontSize: 12, color: "#94a3b8" }}>{e.to_email}</div>}
+                  {emails.map(e => (
+                    <tr key={e.id}>
+                      <td>
+                        <div className="cell-main">{e.name || e.to_email}</div>
+                        {e.name && <div className="cell-sub">{e.to_email}</div>}
                       </td>
-                      <td style={{ padding: "12px 20px", color: "#334155" }}>{e.company || <span style={{ color: "#94a3b8" }}>—</span>}</td>
-                      <td style={{ padding: "12px 20px", color: "#334155", maxWidth: 260 }}>
+                      <td style={{ color: "var(--muted)" }}>{e.company || "—"}</td>
+                      <td style={{ maxWidth: 260 }}>
                         <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</div>
                       </td>
-                      <td style={{ padding: "12px 20px" }}>
-                        <span style={{
-                          display: "inline-block", padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500,
-                          background: e.type === "initial" ? "#eff6ff" : "#f5f3ff",
-                          color: e.type === "initial" ? "#3b82f6" : "#8b5cf6",
-                        }}>
-                          {e.type === "initial" ? "Initial" : "Follow-up"}
-                        </span>
+                      <td>
+                        <Badge
+                          label={e.type === "initial" ? "Initial" : "Follow-up"}
+                          color={e.type === "initial" ? "blue" : "purple"}
+                        />
                       </td>
-                      <td style={{ padding: "12px 20px", color: "#64748b", fontSize: 13 }}>{formatDate(e.sent_at)}</td>
+                      <td className="num" style={{ color: "var(--muted)" }}>{fmtDate(e.sent_at)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
           </div>
-
         </div>
-      </body>
-    </html>
+
+      </main>
+
+      <script dangerouslySetInnerHTML={{ __html: tabScript }} />
+    </>
   );
 }
