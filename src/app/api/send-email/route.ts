@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   // to, subject, body are required
   // name, company, apply_url are optional but stored for tracking
-  const { to, subject, body, name, company, apply_url } = await req.json();
+  const { to, subject, body, name, company } = await req.json();
 
   if (!to || !subject || !body) {
     return NextResponse.json({ error: "Missing to, subject, or body" }, { status: 400 });
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     company: company ?? null,
     subject,
     type: "initial",
-    apply_url: apply_url ?? null,
+    apply_url: null,
     sent_at: new Date().toISOString(),
   });
 
