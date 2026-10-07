@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { readFile } from "fs/promises";
 import path from "path";
-import { logEmail, isDuplicate, getDailyCount, DAILY_LIMIT } from "@/lib/sheets";
+import { logEmail, getDailyCount, DAILY_LIMIT } from "@/lib/sheets";
 
 const GMAIL_USER = process.env.GMAIL_USER!;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD!;
@@ -11,6 +11,11 @@ const FROM_NAME = process.env.FROM_NAME || GMAIL_USER;
 
 const RESUME_PATH = path.join(process.cwd(), "assets", "resume.pdf");
 const RESUME_FILENAME = "Vikas_Verma_Resume.pdf";
+
+const DEFAULT_FOLLOWUP_BODY =
+  `Just wanted to follow up on my previous email in case it got buried.\n\n` +
+  `I'm still very interested in the opportunity and would love to connect. I've attached my resume again for reference.\n\n` +
+  `Happy to jump on a quick call whenever works for you.`;
 
 function wrapHtml(senderName: string, senderEmail: string, body: string): string {
   const paragraphs = body
@@ -46,27 +51,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { to, subject, body } = await req.json();
+  // original_subject is used to build "Re: ..." so it threads in email clients
+  const { to, original_subject, body } = await req.json();
 
-  if (!to || !subject || !body) {
-    return NextResponse.json({ error: "Missing to, subject, or body" }, { status: 400 });
+  if (!to || !original_subject) {
+    return NextResponse.json({ error: "Missing to or original_subject" }, { status: 400 });
   }
 
-  // --- Daily cap ---
+  // --- Daily cap (shared with send-email) ---
   const todayCount = await getDailyCount();
   if (todayCount >= DAILY_LIMIT) {
     return NextResponse.json(
       { error: `Daily limit reached (${DAILY_LIMIT}/day). Try again tomorrow.`, sent_today: todayCount },
       { status: 429 }
-    );
-  }
-
-  // --- Duplicate guard ---
-  const alreadySent = await isDuplicate(to);
-  if (alreadySent) {
-    return NextResponse.json(
-      { error: `Already emailed ${to} in the last 30 days. Use /api/follow-up instead.` },
-      { status: 409 }
     );
   }
 
@@ -81,6 +78,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Resume file is not a valid PDF" }, { status: 500 });
   }
 
+  const followUpBody = body || DEFAULT_FOLLOWUP_BODY;
+  const followUpSubject = original_subject.startsWith("Re:")
+    ? original_subject
+    : `Re: ${original_subject}`;
+
   // --- Send ---
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -90,36 +92,16 @@ export async function POST(req: NextRequest) {
   await transporter.sendMail({
     from: `"${FROM_NAME}" <${GMAIL_USER}>`,
     to,
-    subject,
-    text: body,
-    html: wrapHtml(FROM_NAME, GMAIL_USER, body),
+    subject: followUpSubject,
+    text: followUpBody,
+    html: wrapHtml(FROM_NAME, GMAIL_USER, followUpBody),
     priority: "high",
     headers: { "X-Mailer": "Personal Mailer", "Precedence": "personal" },
     attachments: [{ filename: RESUME_FILENAME, content: resumeBuffer, contentType: "application/pdf" }],
   });
 
   // --- Log to sheet ---
-  await logEmail(to, subject, "initial");
+  await logEmail(to, followUpSubject, "followup");
 
-  return NextResponse.json({ success: true, to, subject, sent_today: todayCount + 1 });
-}
-
-export async function GET(req: NextRequest) {
-  if (!API_SECRET || req.headers.get("x-api-secret") !== API_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  try {
-    const [buf, todayCount] = await Promise.all([readFile(RESUME_PATH), getDailyCount()]);
-    return NextResponse.json({
-      ok: true,
-      resume: RESUME_FILENAME,
-      bytes: buf.length,
-      isPdf: buf.subarray(0, 5).toString() === "%PDF-",
-      from: `${FROM_NAME} <${GMAIL_USER}>`,
-      sent_today: todayCount,
-      daily_limit: DAILY_LIMIT,
-    });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Resume file missing or sheet unreachable" }, { status: 500 });
-  }
+  return NextResponse.json({ success: true, to, subject: followUpSubject, sent_today: todayCount + 1 });
 }
