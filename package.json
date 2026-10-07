@@ -8,17 +8,20 @@
     "start": "next start"
   },
   "dependencies": {
+    "@upstash/redis": "^1.39.0",
     "googleapis": "^183.0.0",
     "next": "14.2.35",
     "nodemailer": "^6.9.14",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/nodemailer": "^6.4.15",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "@types/uuid": "^10.0.0",
     "typescript": "^5"
   }
 }

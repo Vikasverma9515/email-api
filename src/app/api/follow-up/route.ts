@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { readFile } from "fs/promises";
 import path from "path";
+import { v4 as uuidv4 } from "uuid";
+import { saveEmail } from "@/lib/db";
 
 const GMAIL_USER = process.env.GMAIL_USER!;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD!;
 const API_SECRET = process.env.API_SECRET!;
 const FROM_NAME = process.env.FROM_NAME || GMAIL_USER;
+const APP_URL = process.env.APP_URL || "";
 
 const RESUME_PATH = path.join(process.cwd(), "assets", "resume.pdf");
 const RESUME_FILENAME = "Vikas_Verma_Resume.pdf";
@@ -16,7 +19,7 @@ const DEFAULT_BODY =
   `I'm still very interested in the opportunity and would love to connect. I've attached my resume again for reference.\n\n` +
   `Happy to jump on a quick call whenever works for you.`;
 
-function wrapHtml(senderName: string, senderEmail: string, body: string): string {
+function wrapHtml(senderName: string, senderEmail: string, body: string, trackingPixelUrl: string): string {
   const paragraphs = body
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 14px 0;line-height:1.6">${p.replace(/\n/g, "<br>")}</p>`)
@@ -36,6 +39,7 @@ function wrapHtml(senderName: string, senderEmail: string, body: string): string
             ${senderName}<br>
             <a href="mailto:${senderEmail}" style="color:#888">${senderEmail}</a>
           </p>
+          ${trackingPixelUrl ? `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;width:1px;height:1px" alt="">` : ""}
         </td></tr>
       </table>
     </td></tr>
@@ -66,10 +70,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Resume file is not a valid PDF" }, { status: 500 });
   }
 
+  const id = uuidv4();
   const followUpBody = body || DEFAULT_BODY;
-  const subject = original_subject.startsWith("Re:")
-    ? original_subject
-    : `Re: ${original_subject}`;
+  const subject = original_subject.startsWith("Re:") ? original_subject : `Re: ${original_subject}`;
+  const trackingPixelUrl = APP_URL ? `${APP_URL}/api/track/${id}` : "";
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -81,11 +85,13 @@ export async function POST(req: NextRequest) {
     to,
     subject,
     text: followUpBody,
-    html: wrapHtml(FROM_NAME, GMAIL_USER, followUpBody),
+    html: wrapHtml(FROM_NAME, GMAIL_USER, followUpBody, trackingPixelUrl),
     priority: "high",
     headers: { "X-Mailer": "Personal Mailer", "Precedence": "personal" },
     attachments: [{ filename: RESUME_FILENAME, content: resumeBuffer, contentType: "application/pdf" }],
   });
 
-  return NextResponse.json({ success: true, to, subject });
+  await saveEmail({ id, to, subject, type: "followup", sentAt: new Date().toISOString(), openedAt: null, openCount: 0 });
+
+  return NextResponse.json({ success: true, to, subject, id });
 }
