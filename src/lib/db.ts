@@ -97,6 +97,21 @@ export async function updateJobStatus(id: string, status: string): Promise<void>
   await db().from("jobs").update({ status }).eq("id", id);
 }
 
+export async function deleteJob(id: string): Promise<void> {
+  await db().from("jobs").delete().eq("id", id);
+}
+
+export async function deleteEmail(id: string): Promise<void> {
+  await db().from("emails").delete().eq("id", id);
+}
+
+export async function clearAll(): Promise<void> {
+  await Promise.all([
+    db().from("emails").delete().neq("id", ""),
+    db().from("jobs").delete().neq("id", ""),
+  ]);
+}
+
 export async function getStats() {
   const [{ count: total }, { count: followups }, jobs] = await Promise.all([
     db().from("emails").select("*", { count: "exact", head: true }),

@@ -192,6 +192,7 @@ export default async function Dashboard() {
       <div className="shell">
 
         {/* ─── Sidebar ─── */}
+        <div id="__cfg" data-s={process.env.API_SECRET} hidden />
         <aside className="sidebar">
           <div className="sb-brand">
             <div className="sb-logo">
@@ -228,6 +229,10 @@ export default async function Dashboard() {
               <h1 className="pg-title">Email Outreach</h1>
               <p className="pg-meta">Last updated {updatedAt} · {process.env.GMAIL_USER}</p>
             </div>
+            <button className="clear-btn" id="clear-all-btn" type="button" title="Clear all data">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              Clear All
+            </button>
           </header>
 
           {/* ── Activity Cards ── */}
@@ -321,15 +326,17 @@ export default async function Dashboard() {
                       <th data-sort="dt" data-stype="str">Last Contact <span className="si">⇅</span></th>
                       <th data-sort="cnt" data-stype="num">Emails <span className="si">⇅</span></th>
                       <th>Apply</th>
+                      <th></th>
                     </tr></thead>
                     <tbody>
                       {companies.map(c => (
-                        <tr key={c.company} data-co={c.company} data-rec={c.recruiter_name || ""} data-dt={c.last_contacted} data-cnt={c.email_count}>
+                        <tr key={c.company} data-co={c.company} data-rec={c.recruiter_name || ""} data-dt={c.last_contacted} data-cnt={c.email_count} data-email-ids={emails.filter(e => e.company === c.company).map(e => e.id).join(",")}>
                           <td><div className="cf"><div className="av" style={{ background: avatarColor(c.company) }}>{initials(c.company)}</div><span className="cm">{c.company}</span></div></td>
                           <td>{c.recruiter_name ? <><div className="cm">{c.recruiter_name}</div><div className="cs">{c.recruiter_email}</div></> : <span className="mu">{c.recruiter_email}</span>}</td>
                           <td className="num mu">{fmtDate(c.last_contacted)}</td>
                           <td><span className="badge b-blue num">{c.email_count}</span></td>
                           <td>{c.apply_url ? <a href={c.apply_url} target="_blank" rel="noreferrer" className="btn-apply">Apply →</a> : <span className="mu">—</span>}</td>
+                          <td><button className="del-btn" data-del-type="email" data-del-company={c.company} title="Delete all emails for this company" type="button">🗑</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -350,6 +357,7 @@ export default async function Dashboard() {
                       <th data-sort="dt" data-stype="str">Found <span className="si">⇅</span></th>
                       <th data-sort="st" data-stype="str">Status <span className="si">⇅</span></th>
                       <th>Link</th>
+                      <th></th>
                     </tr></thead>
                     <tbody>
                       {jobs.map(j => (
@@ -360,6 +368,7 @@ export default async function Dashboard() {
                           <td className="num mu">{fmtDate(j.found_at)}</td>
                           <td><span className={`badge ${j.status === "applied" ? "b-green" : j.status === "skip" ? "b-slate" : "b-amber"}`}>{j.status === "applied" ? "Applied" : j.status === "skip" ? "Skipped" : "To Apply"}</span></td>
                           <td><a href={j.url} target="_blank" rel="noreferrer" className="btn-apply">Apply →</a></td>
+                          <td><button className="del-btn" data-del-type="job" data-del-id={j.id} title="Delete job" type="button">🗑</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -379,6 +388,7 @@ export default async function Dashboard() {
                       <th data-sort="sub" data-stype="str">Subject <span className="si">⇅</span></th>
                       <th data-sort="typ" data-stype="str">Type <span className="si">⇅</span></th>
                       <th data-sort="dt" data-stype="str">Date <span className="si">⇅</span></th>
+                      <th></th>
                     </tr></thead>
                     <tbody>
                       {emails.map(e => (
@@ -388,6 +398,7 @@ export default async function Dashboard() {
                           <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} className="mu">{e.subject}</td>
                           <td><span className={`badge ${e.type === "initial" ? "b-blue" : "b-purple"}`}>{e.type === "initial" ? "Initial" : "Follow-up"}</span></td>
                           <td className="num mu">{fmtDate(e.sent_at)}</td>
+                          <td><button className="del-btn" data-del-type="email" data-del-id={e.id} title="Delete email log" type="button">🗑</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -572,6 +583,20 @@ const CSS = `
   .trend-up{color:var(--green)}
   .trend-dn{color:var(--red)}
 
+  /* delete */
+  .del-btn{background:none;border:none;cursor:pointer;opacity:0;font-size:13px;padding:2px 4px;border-radius:4px;transition:opacity .15s,background .15s;line-height:1}
+  tbody tr:hover .del-btn{opacity:.4}
+  .del-btn:hover{opacity:1!important;background:rgba(239,68,68,.15)}
+  .clear-btn{display:flex;align-items:center;gap:6px;padding:7px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;color:#ef4444;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
+  .clear-btn:hover{background:rgba(239,68,68,.16)}
+  .del-confirm{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
+  .del-box{background:var(--s2);border:1px solid var(--bd);border-radius:14px;padding:24px 28px;max-width:320px;width:90%;text-align:center}
+  .del-box h3{font-size:15px;font-weight:600;margin-bottom:8px}
+  .del-box p{font-size:12px;color:var(--m2);margin-bottom:20px}
+  .del-box-btns{display:flex;gap:8px;justify-content:center}
+  .del-cancel{padding:8px 18px;background:var(--s1);border:1px solid var(--bd);border-radius:8px;color:var(--fg);font-size:12px;font-weight:500;cursor:pointer;font-family:inherit}
+  .del-ok{padding:8px 18px;background:#ef4444;border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+
   /* responsive */
   @media(max-width:1100px){.bottom-grid{grid-template-columns:1fr}}
   @media(max-width:860px){.activity-grid{grid-template-columns:1fr 1fr}}
@@ -591,6 +616,8 @@ const CSS = `
 
 const JS = `
 (function(){
+  var SECRET=document.getElementById('__cfg')?.dataset.s||'';
+
   // ── tabs ──
   var tabs=document.querySelectorAll('.tab[data-panel]');
   var panels=document.querySelectorAll('.panel');
@@ -603,10 +630,9 @@ const JS = `
   try{var s=localStorage.getItem('et_v3');if(s)activateTab(s)}catch(e){}
 
   // ── sidebar nav ──
-  var sbBtns=document.querySelectorAll('.sb-btn[data-sb]');
-  sbBtns.forEach(function(b){
+  document.querySelectorAll('.sb-btn[data-sb]').forEach(function(b){
     b.addEventListener('click',function(){
-      sbBtns.forEach(function(x){x.classList.remove('active')});
+      document.querySelectorAll('.sb-btn[data-sb]').forEach(function(x){x.classList.remove('active')});
       b.classList.add('active');
       var t=b.dataset.sb;
       if(t!=='all') activateTab(t);
@@ -634,6 +660,57 @@ const JS = `
         return asc?cmp:-cmp;
       });
       rows.forEach(function(r){tbody.appendChild(r)});
+    });
+  });
+
+  // ── confirm dialog ──
+  function confirm(msg, onOk){
+    var overlay=document.createElement('div');
+    overlay.className='del-confirm';
+    overlay.innerHTML='<div class="del-box"><h3>Delete?</h3><p>'+msg+'</p><div class="del-box-btns"><button class="del-cancel">Cancel</button><button class="del-ok">Delete</button></div></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.del-cancel').addEventListener('click',function(){overlay.remove()});
+    overlay.querySelector('.del-ok').addEventListener('click',function(){overlay.remove();onOk()});
+    overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove()});
+  }
+
+  // ── delete single record ──
+  function deleteRecord(type, id, row){
+    confirm('This action cannot be undone.',function(){
+      row.style.opacity='0.3';
+      fetch('/api/delete',{method:'DELETE',headers:{'Content-Type':'application/json','x-api-secret':SECRET},body:JSON.stringify({type:type,id:id})})
+        .then(function(r){if(r.ok)row.remove();else row.style.opacity='';});
+    });
+  }
+
+  document.querySelectorAll('.del-btn').forEach(function(btn){
+    btn.addEventListener('click',function(e){
+      e.stopPropagation();
+      var type=btn.dataset.delType;
+      var id=btn.dataset.delId;
+      var company=btn.dataset.delCompany;
+      var row=btn.closest('tr');
+      if(company){
+        var ids=(row.dataset.emailIds||'').split(',').filter(Boolean);
+        var msg=ids.length>0?'Delete '+ids.length+' email log entries for "'+company+'"?':'Remove "'+company+'" from view?';
+        confirm(msg,function(){
+          row.style.opacity='0.3';
+          if(ids.length===0){row.remove();return;}
+          Promise.all(ids.map(function(eid){
+            return fetch('/api/delete',{method:'DELETE',headers:{'Content-Type':'application/json','x-api-secret':SECRET},body:JSON.stringify({type:'email',id:eid})});
+          })).then(function(){row.remove()});
+        });
+      } else {
+        deleteRecord(type,id,row);
+      }
+    });
+  });
+
+  // ── clear all ──
+  document.getElementById('clear-all-btn')?.addEventListener('click',function(){
+    confirm('Delete ALL emails and jobs? This cannot be undone.',function(){
+      fetch('/api/delete',{method:'DELETE',headers:{'Content-Type':'application/json','x-api-secret':SECRET},body:JSON.stringify({type:'all'})})
+        .then(function(r){if(r.ok)location.reload()});
     });
   });
 })();
