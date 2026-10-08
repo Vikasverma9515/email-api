@@ -312,6 +312,14 @@ export default async function Dashboard() {
                 <button className="tab" data-panel="p-emails" type="button">
                   Email Log <span className="tc">{stats.total}</span>
                 </button>
+                {/* Bulk action bar — shown via JS when rows selected */}
+                <div className="bulk-bar" id="bulk-bar" hidden>
+                  <span className="bulk-count" id="bulk-count">0 selected</span>
+                  <button className="bulk-del" id="bulk-del" type="button">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                    Delete Selected
+                  </button>
+                </div>
               </div>
 
               {/* Companies */}
@@ -321,6 +329,7 @@ export default async function Dashboard() {
                 ) : (
                   <table>
                     <thead><tr>
+                      <th style={{ width: 36, padding: "8px 8px 8px 14px" }}><input type="checkbox" className="sel-all" data-panel-sel="p-companies" /></th>
                       <th data-sort="co" data-stype="str">Company <span className="si">⇅</span></th>
                       <th data-sort="rec" data-stype="str">Recruiter <span className="si">⇅</span></th>
                       <th data-sort="dt" data-stype="str">Last Contact <span className="si">⇅</span></th>
@@ -331,6 +340,7 @@ export default async function Dashboard() {
                     <tbody>
                       {companies.map(c => (
                         <tr key={c.company} data-co={c.company} data-rec={c.recruiter_name || ""} data-dt={c.last_contacted} data-cnt={c.email_count} data-email-ids={emails.filter(e => e.company === c.company).map(e => e.id).join(",")}>
+                          <td style={{ padding: "8px 8px 8px 14px" }}><input type="checkbox" className="row-sel" data-del-type="email-company" data-del-ids={emails.filter(e => e.company === c.company).map(e => e.id).join(",")} /></td>
                           <td><div className="cf"><div className="av" style={{ background: avatarColor(c.company) }}>{initials(c.company)}</div><span className="cm">{c.company}</span></div></td>
                           <td>{c.recruiter_name ? <><div className="cm">{c.recruiter_name}</div><div className="cs">{c.recruiter_email}</div></> : <span className="mu">{c.recruiter_email}</span>}</td>
                           <td className="num mu">{fmtDate(c.last_contacted)}</td>
@@ -351,6 +361,7 @@ export default async function Dashboard() {
                 ) : (
                   <table>
                     <thead><tr>
+                      <th style={{ width: 36, padding: "8px 8px 8px 14px" }}><input type="checkbox" className="sel-all" data-panel-sel="p-jobs" /></th>
                       <th data-sort="co" data-stype="str">Company <span className="si">⇅</span></th>
                       <th data-sort="role" data-stype="str">Role <span className="si">⇅</span></th>
                       <th data-sort="src" data-stype="str">Source <span className="si">⇅</span></th>
@@ -362,6 +373,7 @@ export default async function Dashboard() {
                     <tbody>
                       {jobs.map(j => (
                         <tr key={j.id} className={j.status === "skip" ? "skip-row" : ""} data-co={j.company} data-role={j.role} data-src={j.source || ""} data-dt={j.found_at} data-st={j.status}>
+                          <td style={{ padding: "8px 8px 8px 14px" }}><input type="checkbox" className="row-sel" data-del-type="job" data-del-ids={j.id} /></td>
                           <td><div className="cf"><div className="av" style={{ background: avatarColor(j.company) }}>{initials(j.company)}</div><span className="cm">{j.company}</span></div></td>
                           <td className="mu">{j.role}</td>
                           <td className="mu" style={{ color: "var(--m2)" }}>{j.source || "—"}</td>
@@ -383,6 +395,7 @@ export default async function Dashboard() {
                 ) : (
                   <table>
                     <thead><tr>
+                      <th style={{ width: 36, padding: "8px 8px 8px 14px" }}><input type="checkbox" className="sel-all" data-panel-sel="p-emails" /></th>
                       <th data-sort="rec" data-stype="str">Recipient <span className="si">⇅</span></th>
                       <th data-sort="co" data-stype="str">Company <span className="si">⇅</span></th>
                       <th data-sort="sub" data-stype="str">Subject <span className="si">⇅</span></th>
@@ -393,6 +406,7 @@ export default async function Dashboard() {
                     <tbody>
                       {emails.map(e => (
                         <tr key={e.id} data-rec={e.name || e.to_email} data-co={e.company || ""} data-sub={e.subject} data-typ={e.type} data-dt={e.sent_at}>
+                          <td style={{ padding: "8px 8px 8px 14px" }}><input type="checkbox" className="row-sel" data-del-type="email" data-del-ids={e.id} /></td>
                           <td><div className="cm">{e.name || e.to_email}</div>{e.name && <div className="cs">{e.to_email}</div>}</td>
                           <td className="mu">{e.company || "—"}</td>
                           <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} className="mu">{e.subject}</td>
@@ -583,6 +597,14 @@ const CSS = `
   .trend-up{color:var(--green)}
   .trend-dn{color:var(--red)}
 
+  /* bulk select */
+  .bulk-bar{display:flex;align-items:center;gap:10px;margin-left:auto;padding:0 10px}
+  .bulk-count{font-size:12px;color:var(--m2);font-weight:500}
+  .bulk-del{display:flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:#ef4444;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s}
+  .bulk-del:hover{background:rgba(239,68,68,.2)}
+  .row-sel,.sel-all{width:14px;height:14px;cursor:pointer;accent-color:var(--ac)}
+  tr.row-selected td{background:rgba(77,114,250,0.06)!important}
+
   /* delete */
   .del-btn{background:none;border:none;cursor:pointer;opacity:0;font-size:13px;padding:2px 4px;border-radius:4px;transition:opacity .15s,background .15s;line-height:1}
   tbody tr:hover .del-btn{opacity:.4}
@@ -711,6 +733,66 @@ const JS = `
     confirm('Delete ALL emails and jobs? This cannot be undone.',function(){
       fetch('/api/delete',{method:'DELETE',headers:{'Content-Type':'application/json','x-api-secret':SECRET},body:JSON.stringify({type:'all'})})
         .then(function(r){if(r.ok)location.reload()});
+    });
+  });
+
+  // ── bulk select ──
+  var bulkBar=document.getElementById('bulk-bar');
+  var bulkCount=document.getElementById('bulk-count');
+  var bulkDel=document.getElementById('bulk-del');
+
+  function getChecked(){
+    return Array.from(document.querySelectorAll('.row-sel:checked'));
+  }
+
+  function updateBulkBar(){
+    var checked=getChecked();
+    if(bulkBar){bulkBar.hidden=checked.length===0;}
+    if(bulkCount){bulkCount.textContent=checked.length+' selected';}
+  }
+
+  document.querySelectorAll('.row-sel').forEach(function(cb){
+    cb.addEventListener('change',function(){
+      var row=cb.closest('tr');
+      if(row){row.classList.toggle('row-selected',cb.checked);}
+      updateBulkBar();
+    });
+  });
+
+  document.querySelectorAll('.sel-all').forEach(function(sa){
+    sa.addEventListener('change',function(){
+      var panelId=sa.dataset.panelSel;
+      var panel=document.getElementById(panelId);
+      if(!panel)return;
+      panel.querySelectorAll('.row-sel').forEach(function(cb){
+        cb.checked=sa.checked;
+        var row=cb.closest('tr');
+        if(row){row.classList.toggle('row-selected',sa.checked);}
+      });
+      updateBulkBar();
+    });
+  });
+
+  bulkDel?.addEventListener('click',function(){
+    var checked=getChecked();
+    if(!checked.length)return;
+    confirm('Delete '+checked.length+' selected record(s)? This cannot be undone.',function(){
+      var allIds=[];
+      checked.forEach(function(cb){
+        var ids=(cb.dataset.delIds||'').split(',').filter(Boolean);
+        var type=cb.dataset.delType;
+        ids.forEach(function(id){allIds.push({type:type,id:id,row:cb.closest('tr')});});
+      });
+      var done=0;
+      var rows=new Set(checked.map(function(cb){return cb.closest('tr');}));
+      rows.forEach(function(r){if(r)r.style.opacity='0.3';});
+      Promise.all(allIds.map(function(item){
+        return fetch('/api/delete',{method:'DELETE',headers:{'Content-Type':'application/json','x-api-secret':SECRET},body:JSON.stringify({type:item.type,id:item.id})});
+      })).then(function(){
+        rows.forEach(function(r){if(r)r.remove();});
+        document.querySelectorAll('.sel-all').forEach(function(sa){sa.checked=false;});
+        updateBulkBar();
+      });
     });
   });
 })();
